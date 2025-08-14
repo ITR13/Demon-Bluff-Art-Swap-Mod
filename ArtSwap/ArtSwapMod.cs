@@ -9,7 +9,7 @@ using UnityEngine;
 using Directory = Il2CppSystem.IO.Directory;
 using Object = UnityEngine.Object;
 
-[assembly: MelonInfo(typeof(ArtSwapMod), "ArtSwap", "0.1.0", "ITR")]
+[assembly: MelonInfo(typeof(ArtSwapMod), "ArtSwap", "0.1.1", "ITR")]
 [assembly: MelonGame("UmiArt", "Demon Bluff")]
 
 namespace ArtSwap
