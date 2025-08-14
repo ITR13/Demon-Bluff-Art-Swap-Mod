@@ -35,8 +35,12 @@ namespace ArtSwap
             }
 
             var characterCount = _gameData.allCharacterData.Count;
-            if (characterCount == _prevCharacterCount) return;
-            LoggerInstance.Msg($"Detected {characterCount} - {_prevCharacterCount} new characters, updating textures");
+            var reload = Input.GetKeyDown(KeyCode.F7);
+
+            var characterCount = _characterData.Length;
+            if (characterCount == _prevCharacterCount && !reload) return;
+            LoggerInstance.Msg($"Reloading textures");
+
             _prevCharacterCount = characterCount;
 
             foreach (var character in _gameData.allCharacterData)

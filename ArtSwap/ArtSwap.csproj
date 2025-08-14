@@ -59,6 +59,9 @@
         <Reference Include="UnityEngine.ImageConversionModule">
           <HintPath>G:\SteamLibrary\steamapps\common\Demon Bluff Playtest\MelonLoader\Il2CppAssemblies\UnityEngine.ImageConversionModule.dll</HintPath>
         </Reference>
+        <Reference Include="UnityEngine.InputLegacyModule">
+          <HintPath>G:\SteamLibrary\steamapps\common\Demon Bluff Playtest\MelonLoader\Il2CppAssemblies\UnityEngine.InputLegacyModule.dll</HintPath>
+        </Reference>
     </ItemGroup>
     <ItemGroup>
         <Compile Include="ArtSwapMod.cs" />
