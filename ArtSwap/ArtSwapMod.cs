@@ -1,12 +1,13 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Text;
 using ArtSwap;
 using Il2Cpp;
 using MelonLoader;
 using UnityEngine;
 using Directory = Il2CppSystem.IO.Directory;
+using Object = UnityEngine.Object;
 
 [assembly: MelonInfo(typeof(ArtSwapMod), "ArtSwap", "0.1.0", "ITR")]
 [assembly: MelonGame("UmiArt", "Demon Bluff")]
@@ -15,26 +16,31 @@ namespace ArtSwap
 {
     public class ArtSwapMod : MelonMod
     {
-        private GameData _gameData;
+        private CharacterData[] _characterData;
         private int _prevCharacterCount = 0;
 
         private string _artDirectory;
 
         public override void OnInitializeMelon()
         {
+            _characterData = Array.Empty<CharacterData>();
             _artDirectory = Path.Combine(Application.dataPath, "..", "Mods", "ArtSwap");
             Directory.CreateDirectory(_artDirectory);
         }
 
+        public override void OnLateInitializeMelon()
+        {
+            Application.runInBackground = true;
+        }
+
         public override void OnUpdate()
         {
-            if (_gameData == null)
+            if (_characterData.Length == 0)
             {
-                _gameData = Resources.FindObjectsOfTypeAll<GameData>().FirstOrDefault();
+                _characterData = Resources.FindObjectsOfTypeAll<CharacterData>();
                 return;
             }
 
-            var characterCount = _gameData.allCharacterData.Count;
             var reload = Input.GetKeyDown(KeyCode.F7);
 
             var characterCount = _characterData.Length;
@@ -43,7 +49,7 @@ namespace ArtSwap
 
             _prevCharacterCount = characterCount;
 
-            foreach (var character in _gameData.allCharacterData)
+            foreach (var character in _characterData)
             {
                 SetupSwap(character);
             }
@@ -122,16 +128,15 @@ namespace ArtSwap
             character.cardBorderColor = SwapColor(character.cardBorderColor, "cardBorderColor");
             character.artBgColor = SwapColor(character.artBgColor, "artBgColor");
 
-            if (newColorsFound)
-            {
-                var sb = new StringBuilder();
-                foreach (var pair in existingColors)
-                {
-                    sb.AppendLine($"{pair.Key} {ColorUtility.ToHtmlStringRGBA(pair.Value)}");
-                }
+            if (!newColorsFound) return;
 
-                File.WriteAllText(colorPath, sb.ToString());
+            var sb = new StringBuilder();
+            foreach (var pair in existingColors)
+            {
+                sb.AppendLine($"{pair.Key} {ColorUtility.ToHtmlStringRGBA(pair.Value)}");
             }
+
+            File.WriteAllText(colorPath, sb.ToString());
         }
 
         byte[] ReadBytes(Texture2D src)
