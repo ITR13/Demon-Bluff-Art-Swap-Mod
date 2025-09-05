@@ -1,13 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 using ArtSwap;
 using Il2Cpp;
 using Il2CppInterop.Runtime;
 using MelonLoader;
 using UnityEngine;
-using Directory = Il2CppSystem.IO.Directory;
 using Object = UnityEngine.Object;
 
 [assembly: MelonInfo(typeof(ArtSwapMod), "ArtSwap", "0.1.1", "ITR")]
@@ -19,13 +19,17 @@ namespace ArtSwap
     {
         private CharacterData[] _characterData;
         private int _prevCharacterCount = 0;
-        private string _artDirectory;
+        private string _artDirectory, _skinsDirectory, _inverseDirectory;
 
         public override void OnInitializeMelon()
         {
             _characterData = Array.Empty<CharacterData>();
             _artDirectory = Path.Combine(Application.dataPath, "..", "Mods", "ArtSwap");
+            _skinsDirectory = Path.Combine(Application.dataPath, "..", "Mods", "Skins");
+            _inverseDirectory = Path.Combine(Application.dataPath, "..", "Mods", "Skins", "Inverse");
             Directory.CreateDirectory(_artDirectory);
+            Directory.CreateDirectory(_skinsDirectory);
+            Directory.CreateDirectory(_inverseDirectory);
         }
 
         public override void OnLateInitializeMelon()
@@ -43,8 +47,10 @@ namespace ArtSwap
                     LoggerInstance.BigError("FindObjectsOfTypeAll returned null array");
                     return;
                 }
+
                 _characterData = new CharacterData[characterData.Length];
-                for (var i = 0; i < _characterData.Length; i++) _characterData[i] = characterData[i]!.Cast<CharacterData>();
+                for (var i = 0; i < _characterData.Length; i++)
+                    _characterData[i] = characterData[i]!.Cast<CharacterData>();
                 return;
             }
 
@@ -60,6 +66,33 @@ namespace ArtSwap
             {
                 SetupSwap(character);
             }
+
+            var skinNames = Directory
+                .GetDirectories(_skinsDirectory, "*", SearchOption.AllDirectories)
+                .Select(Path.GetFileName)
+                .ToHashSet();
+            var seenSkins = new HashSet<string>();
+            var unlockedSkins = SavesGame.UnlockedSkins;
+            var ids = unlockedSkins.ids;
+            foreach (var orgSkins in ids)
+            {
+                seenSkins.Add(orgSkins);
+            }
+
+            var anyChange = false;
+            foreach (var skinName in skinNames)
+            {
+                if (seenSkins.Contains(skinName)) continue;
+                ids.Add(skinName);
+                anyChange = true;
+            }
+
+            // Save back to PlayerPrefs
+            if (anyChange)
+            {
+                SavesGame.UnlockedSkins = unlockedSkins;
+                PlayerPrefs.Save();
+            }
         }
 
         private void SetupSwap(CharacterData character)
@@ -68,25 +101,43 @@ namespace ArtSwap
             var characterDirectory = Path.Combine(_artDirectory, character.characterId);
             Directory.CreateDirectory(characterDirectory);
 
+            var inversePath = Path.Combine(_inverseDirectory, $"{character.characterId}.png");
+            if (!File.Exists(inversePath) && character.art_cute != null  && character.art_cute.texture != null)
+            {
+                var bytes = ReadBytes(character.art_cute.texture, true);
+                File.WriteAllBytes(inversePath, bytes);
+            }
+
+            var skins = Directory.GetFiles(
+                _skinsDirectory,
+                $"{character.characterId}.png",
+                SearchOption.AllDirectories
+            );
+            foreach (var skinPath in skins)
+            {
+                var skinName = Path.GetFileName(Path.GetDirectoryName(skinPath)!);
+                var skinData = ScriptableObject.CreateInstance<SkinData>();
+                skinData.art = CreateSprite(skinPath);
+                skinData.skinId = skinName;
+                skinData.name = skinName;
+                skinData.skinFor = character;
+                skinData.skinRarity = ERarity.Common;
+                skinData.artistName = "TODO: Artist Name";
+                skinData.artistLink = "TODO: Artist Link";
+                skinData.flavor = "TODO: Flavor";
+                skinData.notes = "TODO: Notes";
+                skinData.unlockWith = new UnlockWith();
+
+                character.skins.Add(skinData);
+            }
+
             Sprite SwapArt(Sprite sprite, string name)
             {
                 var path = Path.Combine(characterDirectory, name + ".png");
 
                 if (File.Exists(path))
                 {
-                    LoggerInstance.Msg($"Reading {path}");
-                    var bytes = File.ReadAllBytes(path);
-                    var newTexture = new Texture2D(2, 2, TextureFormat.ARGB32, false);
-                    ImageConversion.LoadImage(newTexture, bytes);
-
-                    newTexture.filterMode = FilterMode.Bilinear;
-                    var newSprite = Sprite.Create(
-                        newTexture,
-                        new Rect(0, 0, newTexture.width, newTexture.height),
-                        new(newTexture.width / 2f, newTexture.height / 2f),
-                        100
-                    );
-                    return newSprite;
+                    return CreateSprite(path);
                 }
 
                 if (sprite == null || sprite.texture == null) return sprite;
@@ -146,7 +197,24 @@ namespace ArtSwap
             File.WriteAllText(colorPath, sb.ToString());
         }
 
-        byte[] ReadBytes(Texture2D src)
+        private Sprite CreateSprite(string path)
+        {
+            LoggerInstance.Msg($"Reading {path}");
+            var bytes = File.ReadAllBytes(path);
+            var newTexture = new Texture2D(2, 2, TextureFormat.ARGB32, false);
+            ImageConversion.LoadImage(newTexture, bytes);
+
+            newTexture.filterMode = FilterMode.Bilinear;
+            var newSprite = Sprite.Create(
+                newTexture,
+                new Rect(0, 0, newTexture.width, newTexture.height),
+                new(newTexture.width / 2f, newTexture.height / 2f),
+                100
+            );
+            return newSprite;
+        }
+
+        byte[] ReadBytes(Texture2D src, bool inverse=false)
         {
             var tmp = RenderTexture.GetTemporary(
                 src.width,
@@ -164,8 +232,24 @@ namespace ArtSwap
 
             var readable = new Texture2D(src.width, src.height, TextureFormat.RGBA32, false);
             readable.ReadPixels(new Rect(0, 0, src.width, src.height), 0, 0);
-            readable.Apply();
 
+            if (inverse)
+            {
+                var pixels = readable.GetPixels();
+                for (int i = 0; i < pixels.Length; i++)
+                {
+                    var alpha = pixels[i].a;
+                    Color.RGBToHSV(pixels[i], out float h, out float s, out float v);
+                    h = (h + 0.5f) % 1f; // rotate hue 180°
+                    var newColor = Color.HSVToRGB(h, s, v);
+                    newColor.a = alpha;
+                    pixels[i] = newColor;
+                }
+                readable.SetPixels(pixels);
+            }
+
+            readable.Apply();
+            
             RenderTexture.active = prev;
             RenderTexture.ReleaseTemporary(tmp);
 

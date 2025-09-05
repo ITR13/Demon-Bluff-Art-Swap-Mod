@@ -62,6 +62,9 @@
         <Reference Include="UnityEngine.InputLegacyModule">
           <HintPath>G:\SteamLibrary\steamapps\common\Demon Bluff Playtest\MelonLoader\Il2CppAssemblies\UnityEngine.InputLegacyModule.dll</HintPath>
         </Reference>
+        <Reference Include="UnityEngine.JSONSerializeModule">
+          <HintPath>G:\SteamLibrary\steamapps\common\Demon Bluff Playtest\MelonLoader\Il2CppAssemblies\UnityEngine.JSONSerializeModule.dll</HintPath>
+        </Reference>
     </ItemGroup>
     <ItemGroup>
         <Compile Include="ArtSwapMod.cs" />
