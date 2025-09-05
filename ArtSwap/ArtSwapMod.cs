@@ -4,6 +4,7 @@ using System.IO;
 using System.Text;
 using ArtSwap;
 using Il2Cpp;
+using Il2CppInterop.Runtime;
 using MelonLoader;
 using UnityEngine;
 using Directory = Il2CppSystem.IO.Directory;
@@ -18,7 +19,6 @@ namespace ArtSwap
     {
         private CharacterData[] _characterData;
         private int _prevCharacterCount = 0;
-
         private string _artDirectory;
 
         public override void OnInitializeMelon()
@@ -37,7 +37,14 @@ namespace ArtSwap
         {
             if (_characterData.Length == 0)
             {
-                _characterData = Resources.FindObjectsOfTypeAll<CharacterData>();
+                var characterData = Resources.FindObjectsOfTypeAll(Il2CppType.Of<CharacterData>());
+                if (characterData == null)
+                {
+                    LoggerInstance.BigError("FindObjectsOfTypeAll returned null array");
+                    return;
+                }
+                _characterData = new CharacterData[characterData.Length];
+                for (var i = 0; i < _characterData.Length; i++) _characterData[i] = characterData[i]!.Cast<CharacterData>();
                 return;
             }
 
