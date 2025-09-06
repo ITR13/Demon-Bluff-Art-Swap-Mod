@@ -11,7 +11,7 @@ using MelonLoader;
 using UnityEngine;
 using Object = UnityEngine.Object;
 
-[assembly: MelonInfo(typeof(ArtSwapMod), "ArtSwap", "0.2.0", "ITR")]
+[assembly: MelonInfo(typeof(ArtSwapMod), "ArtSwap", "0.2.1", "ITR")]
 [assembly: MelonGame("UmiArt", "Demon Bluff")]
 
 namespace ArtSwap
