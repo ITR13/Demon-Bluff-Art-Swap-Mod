@@ -62,9 +62,9 @@ namespace ArtSwap
                 }
             }
 
-            while (_logQueue.TryDequeue(out var msg)) LoggerInstance.Msg(msg);
+            if (_logQueue.TryDequeue(out var msg)) LoggerInstance.Msg(msg);
 
-            for (var i = 0; i < 5 && _mainThreadQueue.TryDequeue(out var action); i++)
+            if (_mainThreadQueue.TryDequeue(out var action))
             {
                 try
                 {
@@ -141,20 +141,27 @@ namespace ArtSwap
             var characterDirectory = Path.Combine(_artDirectory, character.characterId);
             Directory.CreateDirectory(characterDirectory);
 
+            // Inverse art
             var inversePath = Path.Combine(_inverseDirectory, $"{character.characterId}.png");
             if (!File.Exists(inversePath) && character.art_cute?.texture != null)
             {
-                try
-                {
-                    var bytes = ReadBytes(character.art_cute.texture, true);
-                    File.WriteAllBytes(inversePath, bytes);
-                }
-                catch (Exception ex)
-                {
-                    _logQueue.Enqueue($"Failed to write inverse art: {ex}");
-                }
+                _mainThreadQueue.Enqueue(
+                    () =>
+                    {
+                        try
+                        {
+                            var bytes = ReadBytes(character.art_cute.texture, true);
+                            File.WriteAllBytes(inversePath, bytes);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logQueue.Enqueue($"Failed to write inverse art: {ex}");
+                        }
+                    }
+                );
             }
 
+            // Skins
             foreach (var skinPath in Directory.GetFiles(
                          _skinsDirectory,
                          $"{character.characterId}.png",
@@ -162,15 +169,8 @@ namespace ArtSwap
                      ))
             {
                 var skinName = Path.GetFileName(Path.GetDirectoryName(skinPath)!);
-                try
-                {
-                    var bytes = File.ReadAllBytes(skinPath);
-                    _mainThreadQueue.Enqueue(() => AssignSkin(character, skinName, bytes));
-                }
-                catch (Exception ex)
-                {
-                    _logQueue.Enqueue($"Failed to read skin {skinPath}: {ex}");
-                }
+                var bytes = File.ReadAllBytes(skinPath); // safe off main thread
+                _mainThreadQueue.Enqueue(() => AssignSkin(character, skinName, bytes));
             }
 
             QueueArtSwap(character.art, "art", characterDirectory, s => character.art = s);
@@ -193,23 +193,31 @@ namespace ArtSwap
 
             if (File.Exists(path))
             {
-                var bytes = File.ReadAllBytes(path);
+                var bytes = File.ReadAllBytes(path); // safe off main thread
                 _mainThreadQueue.Enqueue(() => assign(CreateSprite(bytes, path)));
             }
             else if (sprite != null && sprite.texture != null)
             {
-                try
-                {
-                    var bytes = ReadBytes(sprite.texture);
-                    File.WriteAllBytes(path, bytes);
-                    _logQueue.Enqueue($"Exported {path}");
-                }
-                catch (Exception ex)
-                {
-                    _logQueue.Enqueue($"Failed to export {name}: {ex}");
-                }
+                // Defer ReadBytes to main thread
+                _mainThreadQueue.Enqueue(
+                    () =>
+                    {
+                        try
+                        {
+                            var bytes = ReadBytes(sprite.texture);
+                            File.WriteAllBytes(path, bytes);
+                            _logQueue.Enqueue($"Exported {path}");
+                            assign(CreateSprite(bytes, path));
+                        }
+                        catch (Exception ex)
+                        {
+                            _logQueue.Enqueue($"Failed to export {name}: {ex}");
+                        }
+                    }
+                );
             }
         }
+
 
         private void AssignSkin(CharacterData character, string skinName, byte[] bytes)
         {
